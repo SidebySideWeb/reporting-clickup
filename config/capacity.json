@@ -5,6 +5,7 @@
   "people": {
     "example.person@andko.gr": {
       "weeklyHours": 40,
+      "role": "dev",
       "team": "Development",
       "leave": [{ "from": "2026-12-28", "to": "2027-01-02" }]
     }

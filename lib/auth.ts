@@ -40,3 +40,43 @@ export async function verifySession(token: string | undefined) {
   if (!expiry || !sig || Number(expiry) < Date.now()) return false;
   return safeEqual(sig, await hmac("v1." + expiry, secret()));
 }
+
+// A post-login path must be a single-slash relative URL. Rejects protocol-relative and backslash tricks.
+export function safeNext(v: unknown) {
+  const s = typeof v === "string" ? v : "";
+  if (s.length > 2000 || !s.startsWith("/") || s.startsWith("//") || s.includes("\\") || s.includes("://")) return "/";
+  try {
+    const d = decodeURIComponent(s);
+    if (!d.startsWith("/") || d.startsWith("//") || d.includes("\\") || d.includes("://")) return "/";
+  } catch {
+    return "/";
+  }
+  return s;
+}
+
+export type Decision =
+  | { kind: "allow" }
+  | { kind: "closed"; status: 503; message: string }
+  | { kind: "deny"; status: 401 }
+  | { kind: "login"; next: string };
+
+const OPEN = new Set(["/login", "/api/login"]);
+
+export function decide(input: {
+  pathname: string;
+  search: string;
+  passwordSet: boolean;
+  production: boolean;
+  sessionOk: boolean;
+}): Decision {
+  if (!input.passwordSet) {
+    if (input.production) {
+      return { kind: "closed", status: 503, message: "DASHBOARD_PASSWORD is not set on this deployment." };
+    }
+    return { kind: "allow" };
+  }
+  if (OPEN.has(input.pathname)) return { kind: "allow" };
+  if (input.sessionOk) return { kind: "allow" };
+  if (input.pathname.startsWith("/api/")) return { kind: "deny", status: 401 };
+  return { kind: "login", next: input.pathname + input.search };
+}

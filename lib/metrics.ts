@@ -1,6 +1,6 @@
 import capacityCfg from "@/config/capacity.json";
 import { pick } from "./clickup";
-import { CONFIG } from "./config";
+import { CONFIG, taskKind, teamFromCapacity } from "./config";
 import { addDays, dow, diffDays, isWorkday, today as todayKey, weekStart, workdaysBetween } from "./dates";
 import type { Entry, RawData, Task } from "./types";
 
@@ -54,12 +54,9 @@ export type Model = {
 };
 
 const kindOf = (t: Task) => {
-  const n = t.typeName.toLowerCase();
-  if (n !== "task") return n;
-  const nm = t.name.toLowerCase();
-  if (/^overview\b/.test(nm)) return "overview";
-  if (/^milestone\b/.test(nm) || t.tags.includes("milestone")) return "milestone";
-  if (/^risk\b/.test(nm)) return "risk";
+  const k = taskKind(t);
+  if (k !== "task") return k;
+  if (t.tags.includes("milestone")) return "milestone";
   return "task";
 };
 export const isWork = (t: Task) => kindOf(t) === "task";
@@ -73,7 +70,7 @@ export function projectKeyOf(t: Task) {
 export function buildModel(raw: RawData): Model {
   const t0 = todayKey();
   const holidays = new Set<string>(capacityCfg.holidays);
-  const cfg = capacityCfg.people as Record<string, { weeklyHours?: number; team?: string; leave?: { from: string; to: string }[] }>;
+  const cfg = capacityCfg.people as Record<string, { weeklyHours?: number; team?: string; role?: string; leave?: { from: string; to: string }[] }>;
 
   const teamVotes = new Map<number, Map<string, number>>();
   for (const t of raw.tasks) {
@@ -95,7 +92,7 @@ export function buildModel(raw: RawData): Model {
       id: m.id,
       name: m.name,
       email: m.email,
-      team: c.team ?? votes[0]?.[0] ?? "Unassigned",
+      team: teamFromCapacity(c) ?? votes[0]?.[0] ?? "Unassigned",
       weeklyHours: c.weeklyHours ?? capacityCfg.defaultWeeklyHours,
       leave: c.leave ?? [],
     };
@@ -155,9 +152,9 @@ function buildProject(key: string, all: Task[], today: string, holidays: Set<str
   const readyQa = openLeaf.filter((t) => has(t, "ready for qa") && wdSince(t.updated) > 1);
   const nextMilestone = milestones.filter((m) => !m.done && m.due).sort((a, b) => a.due!.localeCompare(b.due!))[0] ?? null;
 
-  const budgetAlert = budgetUsed !== null && budgetUsed >= 0.8 && progress < 0.8 && kind !== "support";
+  const budgetAlert = budgetUsed !== null && budgetUsed >= CONFIG.budgetAlert && progress < CONFIG.budgetAlert && kind !== "support";
   const overOffer = offerH !== null && spentH > offerH;
-  const longBlocked = blocked.some((t) => wdSince(t.updated) > 3);
+  const longBlocked = blocked.some((t) => wdSince(t.updated) > CONFIG.blockedRedDays);
 
   // Health: PM-set value in ClickUp wins; otherwise computed with SOP v4 rules.
   const why: string[] = [];
@@ -167,7 +164,7 @@ function buildProject(key: string, all: Task[], today: string, holidays: Set<str
   else if (blocked.length) why.push(`${blocked.length} blocked`);
   if (budgetAlert) why.push("budget alert: 80% of hours used, under 80% done");
   if (overdue.length) why.push(`${overdue.length} overdue`);
-  if ((slipWd ?? 0) > 5 || longBlocked) health = "Red";
+  if ((slipWd ?? 0) > CONFIG.slipRedDays || longBlocked) health = "Red";
   else if (why.length) health = "Amber";
   const computedHealth = health;
   let healthSource: Project["healthSource"] = "Computed";

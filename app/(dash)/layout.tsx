@@ -1,9 +1,10 @@
 import NavLinks from "@/components/NavLinks";
-import { CONFIG } from "@/lib/config";
+import { getRaw } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
-export default function DashLayout({ children }: { children: React.ReactNode }) {
+export default async function DashLayout({ children }: { children: React.ReactNode }) {
+  const raw = await getRaw().catch(() => null);
   return (
     <div className="shell">
       <aside className="side">
@@ -17,9 +18,14 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
         </form>
       </aside>
       <main className="main">
-        {CONFIG.demo ? (
+        {raw?.demo ? (
           <div className="banner" role="status">
             <strong>Demo data.</strong> No <code>CLICKUP_API_TOKEN</code> is set, so every number here is fictional. Add the token in Vercel to read live ClickUp data.
+          </div>
+        ) : null}
+        {raw?.stale ? (
+          <div className="banner" role="status">
+            <strong>Stale data.</strong> ClickUp could not be refreshed{raw.warning ? ` (${raw.warning})` : ""}. Showing the last successful fetch.
           </div>
         ) : null}
         {children}

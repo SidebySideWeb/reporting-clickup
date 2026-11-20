@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE, SESSION_SECONDS, checkPassword, createSession } from "@/lib/auth";
+import { COOKIE, SESSION_SECONDS, checkPassword, createSession, safeNext } from "@/lib/auth";
 
 export const runtime = "nodejs";
-
-function safeNext(v: FormDataEntryValue | null) {
-  const s = typeof v === "string" ? v : "/";
-  return s.startsWith("/") && !s.startsWith("//") && !s.startsWith("/api") ? s : "/";
-}
 
 export async function POST(req: NextRequest) {
   const form = await req.formData();
